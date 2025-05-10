@@ -15,6 +15,9 @@ const PDFJSViewer = () => {
   const [scale, setScale] = useState<number>(1.0);
   const [rotation, setRotation] = useState<number>(0);
 
+  const [isLoadingUrl, setIsLoadingUrl] = useState<boolean>(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -35,17 +38,17 @@ const PDFJSViewer = () => {
         console.error('Failed to get 2D context from canvas.');
         return;
       }
-      
+
       const viewport: PageViewport = page.getViewport({ scale, rotation });
-      
+
       canvas.height = viewport.height;
       canvas.width = viewport.width;
-      
+
       const renderContext: PageRenderParameters = {
         canvasContext: context,
         viewport: viewport
       };
-      
+
       await page.render(renderContext).promise;
     } catch (error) {
       console.error("Error rendering page:", error);
@@ -62,6 +65,8 @@ const PDFJSViewer = () => {
       }
       return;
     }
+    setUrlError(null);
+    setIsLoadingUrl(false);
 
     const reader = new FileReader();
     reader.onload = async (e: ProgressEvent<FileReader>) => {
@@ -74,7 +79,7 @@ const PDFJSViewer = () => {
 
         const loadingTask = pdfjsLib.getDocument({ data: typedArray });
         const pdf: PDFDocumentProxy = await loadingTask.promise;
-        
+
         setPdfDoc(pdf);
         setTotalPages(pdf.numPages);
         setPageNum(1);
@@ -84,20 +89,57 @@ const PDFJSViewer = () => {
         console.error('Error loading PDF:', error);
         alert(`Error loading PDF file: ${error instanceof Error ? error.message : String(error)}`);
         if (fileInputRef.current) {
-            fileInputRef.current.value = "";
+          fileInputRef.current.value = "";
         }
         setPdfDoc(null);
         setTotalPages(0);
       }
     };
     reader.onerror = () => {
-        alert('Error reading file');
-        if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-        }
+      alert('Error reading file');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
     reader.readAsArrayBuffer(file);
   };
+
+  const loadPdfFromUrl = async (url: string) => {
+    if (isLoadingUrl) return;
+    setIsLoadingUrl(true);
+    setUrlError(null);
+    setPdfDoc(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    try {
+      const loadingTask = pdfjsLib.getDocument(url);
+      const pdf: PDFDocumentProxy = await loadingTask.promise;
+      setPdfDoc(pdf);
+      setTotalPages(pdf.numPages);
+      setPageNum(1);
+      setScale(1.0);
+      setRotation(0);
+    } catch (err) {
+      console.error('Error loading PDF from URL:', err);
+      let errorMessage = 'Failed to load PDF from URL.';
+      if (err instanceof Error) {
+        if ('name' in err && err.name === 'MissingPDFException') {
+          errorMessage = `File not found at URL: ${url}. Or CORS issue.`;
+        } else if ('name' in err && err.name === 'UnexpectedResponseException') {
+          errorMessage = `Unexpected server response from URL: ${url}. Check if the file exists and the server is configured correctly (CORS?).`;
+        } else {
+          errorMessage += ` ${err.message}`;
+        }
+      }
+      setUrlError(errorMessage);
+      setPdfDoc(null);
+      setTotalPages(0);
+    } finally {
+      setIsLoadingUrl(false);
+    }
+  }
 
   const goToPrevPage = () => {
     if (pageNum > 1) {
@@ -134,18 +176,37 @@ const PDFJSViewer = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfDoc, pageNum, scale, rotation]);
 
+  //url to load a test PDF file
+  const testPdfUrl = '/test.pdf';
+
   return (
     <div className="pdf-viewer">
       <div className="pdf-header">
         <h2>PDF Viewer</h2>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept="application/pdf"
-          className="file-input"
-        />
+        <div className="file-controls">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="application/pdf"
+            className="file-input"
+            disabled={isLoadingUrl}
+          />
+          <button
+            onClick={() => loadPdfFromUrl(testPdfUrl)}
+            disabled={isLoadingUrl}
+            className="load-url-button"
+          >
+            {isLoadingUrl ? 'Loading Test PDF...' : 'Load Test PDF (from URL)'}
+          </button>
+        </div>
       </div>
+
+      {urlError && !pdfDoc && ( // Show URL error only if there is no document loaded
+        <div className="placeholder error-message" style={{ color: 'red', textAlign: 'center', padding: '10px' }}>
+          {urlError}
+        </div>
+      )}
 
       {pdfDoc && (
         <div className="controls-container">
@@ -178,9 +239,12 @@ const PDFJSViewer = () => {
       <div className="pdf-container">
         {pdfDoc ? (
           <canvas ref={canvasRef} />
-        ) : (
-          <div className="placeholder">Select a PDF file to view</div>
-        )}
+        ) : isLoadingUrl ? (<div className="placeholder">Loading from URL...</div>) : urlError ? (
+          null
+        )
+          : (
+            <div className="placeholder">Select a PDF file to view</div>
+          )}
       </div>
     </div>
   );
