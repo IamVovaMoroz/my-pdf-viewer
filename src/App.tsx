@@ -3,6 +3,8 @@ import './App.css';
 import { GlobalWorkerOptions } from 'pdfjs-dist';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from 'pdfjs-dist';
+import type { TextContent } from 'pdfjs-dist/types/src/display/api';
+
 
 GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -21,11 +23,17 @@ const PDFJSViewer = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
+  const renderAreaRef = useRef<HTMLDivElement | null>(null);
+
   const renderPage = async (pageNumber: number) => {
     if (!pdfDoc) return;
 
     const canvas = canvasRef.current;
-    if (!canvas) {
+
+    const textLayerDiv = textLayerRef.current;
+
+    if (!canvas || !textLayerDiv) {
       console.error("Canvas element not found.");
       return;
     }
@@ -43,16 +51,47 @@ const PDFJSViewer = () => {
 
       canvas.height = viewport.height;
       canvas.width = viewport.width;
+      // 
+      textLayerDiv.style.width = `${viewport.width}px`;
+      textLayerDiv.style.height = `${viewport.height}px`;
+      textLayerDiv.innerHTML = '';
 
-      const renderContext: PageRenderParameters = {
+         const renderContext: PageRenderParameters = {
         canvasContext: context,
         viewport: viewport
+
+        
       };
 
       await page.render(renderContext).promise;
+
+      const textContent: TextContent = await page.getTextContent();
+
+      pdfjsLib.renderTextLayer({
+        textContentSource: textContent, 
+        container: textLayerDiv,
+        viewport: viewport,
+        textDivs: [] 
+      });
+
     } catch (error) {
       console.error("Error rendering page:", error);
       alert(`Error rendering page: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  // NEW: Обработчик для события mouseup для получения выделенного текста
+  const handleTextSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim() !== '') {
+      console.log('Selected text:', selection.toString());
+      console.log('Selection Anchor Node:', selection.anchorNode);
+      console.log('Selection Focus Node:', selection.focusNode);
+      console.log('Selection Range Count:', selection.rangeCount);
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        console.log('Selection Range Bounding Rect:', range.getBoundingClientRect());
+      }
     }
   };
 
@@ -236,15 +275,25 @@ const PDFJSViewer = () => {
         </div>
       )}
 
-      <div className="pdf-container">
-        {pdfDoc ? (
-          <canvas ref={canvasRef} />
-        ) : isLoadingUrl ? (<div className="placeholder">Loading from URL...</div>) : urlError ? (
-          null
-        )
-          : (
-            <div className="placeholder">Select a PDF file to view</div>
-          )}
+      <div className="pdf-container" ref={renderAreaRef} onMouseUp={handleTextSelection}  >
+      {pdfDoc ? (
+      
+      <div
+      className="textLayerWrapper"
+      style={{ "--scale-factor": scale } as React.CSSProperties} 
+    >
+      <canvas ref={canvasRef} style={{ display: "block" }} />
+
+      <div ref={textLayerRef} className="textLayer" />
+    </div>
+        ) : isLoadingUrl ? (
+          <div className="placeholder">Loading from URL...</div>
+        ) : urlError ? (
+      
+          <div className="placeholder">Failed to load PDF.</div>
+        ) : (
+          <div className="placeholder">Select a PDF file or click "Load Test PDF (from URL)"</div>
+        )}
       </div>
     </div>
   );

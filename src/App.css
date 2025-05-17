@@ -111,6 +111,7 @@ button:disabled {
 }
 
 .pdf-container {
+  position: relative; 
   border: 1px solid #444; 
   min-height: 600px;
   overflow: auto;
@@ -122,11 +123,6 @@ button:disabled {
   border-radius: 8px;
 }
 
-canvas {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); 
-  background-color: white;
-  border-radius: 4px;
-}
 
 .placeholder {
   color: #909090; 
@@ -139,45 +135,26 @@ canvas {
   text-align: center;
 }
 
-@media (max-width: 768px) {
-  .pdf-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-  }
 
-  .controls-container {
-    flex-direction: column;
-    align-items: stretch;
-  }
+/* .textLayer > span,
+.textLayer > br { 
+  color: blue;      
+   position: absolute; 
 
-  .page-controls,
-  .zoom-controls,
-  .rotation-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
+} */
 
-  .page-controls span,
-  .zoom-controls span,
-  .rotation-controls span {
-    text-align: left;
-    margin-bottom: 5px;
-  }
+canvas {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); 
+  background-color: white;
+  border-radius: 4px;
+  /* border: 2px solid red; */
 
-  button {
-    width: 100%;
-  }
 }
 
-@media (max-width: 480px) {
-  .pdf-viewer {
-    padding: 15px;
-  }
-  .pdf-header h2 {
-    font-size: 1.5em;
-  }
-  button {
-    padding: 12px 15px;
-  }
+.textLayerWrapper {
+  position: relative;
+  transform-origin: 0 0;
+  transform: scale(var(--scale-factor, 1));
+  width: fit-content;
+  margin: 0 auto; 
 }
